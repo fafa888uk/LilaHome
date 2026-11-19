@@ -1,0 +1,102 @@
+# Lila Home v0.1 — Docker Compose
+# 部署位置（服务器）：/opt/lila-home/infrastructure/docker/docker-compose.yml
+# 启动：cd /opt/lila-home/infrastructure/docker && docker compose --env-file .env up -d --build
+# 注意：
+# - postgres 与 mosquitto 不发布任何端口，只在 compose 内部网络通信。
+# - api 与 web 只绑定 Tailscale IP 100.114.133.80，绝不绑 0.0.0.0（服务器 UFW 是关的）。
+# - Mosquitto v0.1 允许匿名连接，但只限内部网络、不暴露端口；接入鉴权是后续阶段事项（见 STAGE1_LOG）。
+
+name: lilahome
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: lila-db-1
+    restart: unless-stopped
+    mem_limit: 512m
+    environment:
+      POSTGRES_USER: lila_home
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD 未设置}
+      POSTGRES_DB: lila_home
+    volumes:
+      - lila_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lila_home -d lila_home"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    networks:
+      - lila-net
+
+  mosquitto:
+    image: eclipse-mosquitto:2.1.4-alpine
+    container_name: lila-mqtt-1
+    restart: unless-stopped
+    mem_limit: 128m
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - lila_mosquitto_data:/mosquitto/data
+      - lila_mosquitto_log:/mosquitto/log
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-h", "localhost", "-p", "1883", "-t", "$$SYS/broker/uptime", "-C", "1", "-W", "3"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    networks:
+      - lila-net
+
+  api:
+    build:
+      context: ../../apps/api
+      dockerfile: Dockerfile
+    image: lila-api:0.1.0
+    container_name: lila-api-1
+    restart: unless-stopped
+    mem_limit: 256m
+    environment:
+      PGHOST: db
+      PGPORT: 5432
+      PGUSER: lila_home
+      PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD 未设置}
+      PGDATABASE: lila_home
+      MQTT_HOST: mosquitto
+      MQTT_PORT: 1883
+    ports:
+      - "100.114.133.80:8001:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      mosquitto:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    networks:
+      - lila-net
+
+  web:
+    build:
+      context: ../../apps/web
+      dockerfile: Dockerfile
+    image: lila-web:0.1.0
+    container_name: lila-web-1
+    restart: unless-stopped
+    mem_limit: 128m
+    ports:
+      - "100.114.133.80:3001:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - lila-net
+
+volumes:
+  lila_postgres_data:
+  lila_mosquitto_data:
+  lila_mosquitto_log:
+
+networks:
+  lila-net:
+    driver: bridge
