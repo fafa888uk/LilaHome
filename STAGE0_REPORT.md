@@ -11,7 +11,7 @@
 |---|---|
 | 项目名称 | Lila Home（紫序智能家居控制中心），Unified Smart Home Platform |
 | 阶段 | Stage 0 已完成（文档交付）；Stage 1 未开始，等待用户明确批准 |
-| 仓库 | **不存在，未创建**（见 F 节） |
+| 仓库 | **已创建：私有仓库 https://github.com/fafa888uk/LilaHome，分支 main，16 个文件已推送（2026-11-19 23:43）**（见 F 节） |
 | 服务器 | 火花面板 3.12.156.80，只读审计已完成；未做任何修改 |
 | 设备 | 无具体型号，全部型号级结论待验证（无型号） |
 | 功能 | 九模块全部 PLANNED，无一 IMPLEMENTED |
@@ -79,13 +79,13 @@
 - **全部型号级结论为“待验证（无型号）”**；未做任何真机测试，未虚构任何设备测试成功。
 - 详见 `docs/audit/DEVICE_COMPATIBILITY.md`；空白清点表见 `docs/audit/DEVICE_INVENTORY_TEMPLATE.md`。
 
-## F. 仓库状态 — NOT EXISTED（未创建，等待授权）
+## F. 仓库状态 — CREATED（已创建，私有，2026-11-19 23:39）
 
 - GitHub 认证身份：fafa888uk（id 293246964，显示名 Fa Fa）。
-- 该账号下 8 个仓库：LilaShift、`-`、fafa920q-hue、makefun-guide、Personal-AI-Gateway、makefun-guide-2、makefun-news-20261118、fafa。**无 LilaHome。**
+- Stage 0 审计时该账号下 8 个仓库：LilaShift、`-`、fafa920q-hue、makefun-guide、Personal-AI-Gateway、makefun-guide-2、makefun-news-20261118、fafa。**当时无 LilaHome。**
 - 全网搜索 LilaHome：0 结果。本地无 LilaHome 目录。
-- 结论：仓库状态为 NOT EXISTED，**未创建**。须用户明确批准后才创建（公开/私有待定）。
-- 仓库规划（只作规划，不建仓）：
+- **更新（2026-11-19 23:39–23:43）：用户授权“你自己看着开”后，仓库已创建——私有仓库 https://github.com/fafa888uk/LilaHome，默认分支 main，许可证 Apache-2.0。API 创建报 403（App 无建仓权限），改由浏览器用用户会话创建（空仓库，未勾选 README/.gitignore/license）。随后 16 个 Stage 0 文档分 4 批推送上库（提交 8c186c7、4ebd5c0、e9d9e7f、27d3d60），抽查 README/STAGE0_REPORT/LICENSE 均在库。**
+- 仓库规划：
 
 ```
 LilaHome/
@@ -160,7 +160,7 @@ LilaHome/
 | H9 | 目标服务器身份最终确认（4 GB vs 7.6 GiB） | PASS（已确认） | 用户 2026-11-19 23:33 明确确认目标服务器就是火花面板 3.12.156.80；任务书 4 GB 为旧规格，以实测 7.6 GiB 为准 |
 | H10 | 防火墙策略确认 | PASS（已决定） | 用户 2026-11-19 23:34 授权自行决定：Stage 1 现阶段不改防火墙，保持 UFW inactive 现状，暴露面仍由“服务只绑回环 + Docker 端口映射”控制；防火墙加固方案 Stage 1 另行设计，实施前复核 |
 | H11 | VPN 最终选型 | PASS（已决定） | 用户 2026-11-19 23:34 授权自行决定：选 **Tailscale 托管**（家庭自用起步，运维最轻）；Headscale 自托管作为后续“去第三方依赖”演进备选 |
-| H12 | LilaHome 仓库创建 | 进行中 | 用户 2026-11-19 23:34 授权自行决定并开工；仓库定为**私有**，许可证定为 **Apache-2.0**；API 创建报 403（App 无建仓权限），已改由浏览器用用户会话创建，待回报后推送 Stage 0 文档 |
+| H12 | LilaHome 仓库创建 | PASS（已创建） | 2026-11-19 23:39 浏览器建私有空仓；23:43 16 个文档分 4 批推送上库（8c186c7、4ebd5c0、e9d9e7f、27d3d60），抽查通过 |
 | H13 | 第 11 个 Docker 容器身份 | NOT TESTED | `docker df` 计 11 total / 10 active，原始记录未列出已停止容器名称 |
 
 ## Stage 1 决策记录（2026-11-19 23:34，用户授权“你自己看着开”）
