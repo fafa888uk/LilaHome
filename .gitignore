@@ -1,0 +1,68 @@
+# Lila Home — .gitignore 草案（Stage 0 规划文件）
+#
+# 说明：本文件只作仓库规划，不含任何真实 Token、密码、IP 配置值。
+# 家庭配置、IP 地址、设备 Token、密码、证书必须进入 .gitignore 或本地秘密管理机制，
+# 公开仓库不得提交任何家庭敏感数据。
+# 仓库尚未创建（GitHub fafa888uk 名下无 LilaHome），本文件随 Stage 1 建仓时启用。
+
+# 依赖与构建产物
+node_modules/
+dist/
+build/
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# 环境变量与秘密（绝不提交）
+.env
+.env.*
+!.env.example
+*.env.local
+secrets/
+*.pem
+*.key
+*.p12
+*.mobileprovision
+*.crt
+id_rsa*
+id_ed25519
+
+# 家庭敏感配置（绝不提交）
+config/home/
+config/devices/
+**/home-assistant/
+**/homeassistant/
+*.storage/
+known_devices.yaml
+configuration.yaml
+secrets.yaml
+device_tokens.json
+*.token
+*.tokens
+
+# 家庭网络与设备信息
+**/inventory-filled.*
+**/device-inventory-filled.*
+**/*-filled.md
+
+# 数据库与运行时数据
+*.sqlite3
+*.db
+data/
+volumes/
+*.log
+*.pid
+
+# 操作系统与编辑器
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Docker
+.docker/
+docker-compose.override.yml
