@@ -44,7 +44,40 @@
   - `docker compose ps`：4 个容器全部 Up，db/mosquitto/api 为 healthy，web 为 Up（未设 healthcheck，以 curl 200 为准）。
 - 访问地址：Web http://100.114.133.80:3001（仅 tailnet 内可达），API http://100.114.133.80:8001。
 - 已知限制：Mosquitto v0.1 允许匿名连接（只限内部网络）；Web 容器未设 healthcheck；前端浏览器内渲染交互、真机显示未测（只有 curl 200 + 本地 preview 验证）。
+- v0.1 已推库：提交 ab1c4aa4b6e3fc3d83fc3260c290e32aff608173（28 个文件：apps/api、apps/web、infrastructure/docker、docs/STAGE1_LOG.md；无 .env、无 node_modules、无 dist）。
+
+## 完整版扩展（2026-11-20 00:33 开始，用户要求做完整版，不止 v0.1）
+
+- 目标：FEATURE_MATRIX.md 九个模块都要有真实功能（不是卡片）：首页聚合、设备 CRUD、房间 CRUD、灯光/空调热水器/音响控制 UI、网络只读监控、场景 CRUD + 规则引擎骨架、RBAC 脚手架 + 审计日志查看。
+- 集成层：统一设备服务层 + HA REST/WebSocket 客户端 + MQTT 发布/订阅服务；HA 与真实设备未接入，控制路径写好但状态一律标“未验证/未接入”，绝不编造设备或假状态。
+- 做法：v0.1 已跑通并验证；现逐模块加上去，每加一个验证健康检查；API 与 Web 扩展各派一个子代理并行做，协调者负责集成、部署、逐模块验证、推库。
+- 诚实约定（已写入子代理任务）：HA 未接入时 POST /devices/{id}/commands 建记录、状态 UNKNOWN、HTTP 202，detail 写明“Home Assistant 未接入，指令未下发，无法确认执行结果”；空列表就是空列表；集成种子一律 is_enabled=false + 未接入。
 - 未做：服务器重启（安装时提示有新内核 7.0.0-1017-aws 可用，当前运行 7.0.0-1014-aws；生产服务器不擅自重启）。
+
+### 完整版扩展完成（2026-11-20 01:05 UTC，部署并逐模块验证通过）
+
+**前后端对接核对（协调者亲自核对，共 5 处不匹配，全部在 API 侧加别名字段修好，v0.1 接口原有字段一个字未动）：**
+1. `/api/v1/status` 扁平字段无 `checks` 键，首页 fetchStatus 解析后 checks 为空、会全显示“后端未返回该项”→ status 响应新增 `checks` 对象（与 /health 同形），原字段不动。
+2. 设备序列化只有 `device_type` / `compatibility_grade`，前端读 `type` / `compatibility_level` / `integration` 会是空→ serialize_device 加三性别名；`_fetch_device` 与 `list_devices` 改 LEFT JOIN integrations 取集成名（`integration_name`），无集成时为 null。
+3. 集成列表只有 `kind` / `is_enabled`，设置页读 `type` / `enabled` 会是空→ list_integrations 加 `type`=kind、`enabled`=is_enabled 别名。
+4. 场景执行记录 `results` 只在嵌套的 `result.results` 里，前端 getSceneRun 读顶层 `results` 会是空→ serialize_run 把 results 同时放顶层。
+5. 已确认无问题：命令 POST 本就含 `command_id`/`status`/`device_id`/`detail`；列表统一 `{items,page,page_size,total}` 或裸数组，前端两种都接受；聚合视图裸数组。
+
+**部署故障 1 项（已修）：** 首次 `up -d --build` 后 api 容器 unhealthy，uvicorn 启动失败 `PermissionError: [Errno 13] Permission denied: '/app/db.py'`——新文件本地模式为 660 且属 root，镜像内运行时用户 appuser（UID 10001）读不到。修法：`apps/api/Dockerfile` 在 COPY 后加 `RUN chmod -R a+rX /app`（与 dy-portal 2026-11-10 教训一致：进镜像的文件须 world-readable）。重建后 api healthy，web 随之启动。web 镜像未受影响（nginx 以 root 起）。
+
+**服务器冒烟测试（2026-11-20 01:03 UTC，脚本 /tmp/smoke-full.sh，服务器本机 curl 100.114.133.80）：41 项 PASS，3 项初判 FAIL 经复核全部是测试脚本问题（两处 grep 响应体找 "422"——422 只在 HTTP 状态行里，响应体是 {"code":"validation_error"...}，复测 HTTP 状态确为 422；一处误以为集成 type 应为 "midea"——type 别名映射的是 kind，实为 "official"，正确），实际 44/44 通过：**
+- /health ok（DB SELECT 1 通过、MQTT CONNACK、HA 未接入）；/api/v1/status 含 checks；/system/health ok。
+- 房间：创建/列表/缺 name 422；设备：创建（model 缺省 UNKNOWN、别名 type=light、compatibility_level=null、integration=null）、state 未接入、非法 device_type 422（"device_type 只能是 router, speaker, light, climate, water_heater, other"）。
+- 命令：turn_on → HTTP 202、status UNKNOWN、detail "Home Assistant 未接入，指令未下发，无法确认执行结果"；危险参数 over_temperature → 422 且记审计；指令历史含 turn_on。
+- 聚合：/lights 含测试灯；/climate、/water-heaters、/speakers 均空数组 []。
+- 场景：创建（rules 原样存）、加动作、执行 → completed_with_unknown、逐动作 UNKNOWN 含 command_id；执行记录 GET 含顶层 results。
+- 网络 /network/devices → not_connected、空数组；审计 /audit-logs 含 device.control；集成 7 行全 is_enabled=false、别名 type=official、enabled=false；用户 []。
+- Web 14 个路由（/ /devices /rooms /lights /climate /speakers /network /scenes /settings /status 及其余）全部 HTTP 200；已部署 bundle 与本地构建同哈希 index-2AqLARsr.js，含新页面文案。
+- 绑定：ss 显示 3001/8001 只监听 100.114.133.80，5432/1883 不在宿主机监听；compose ps 4 容器 Up，db/mosquitto/api healthy，web Up。
+- 测试数据已清理：冒烟房间/设备/场景均已 DELETE，再查列表已无残留。审计日志里保留本次冒烟的操作记录（真实操作历史，非假数据）。
+- API 子代理本地实测补充：临时 PG 16 全流程通过，修复两个真 bug（asyncpg jsonb 只接受 str、scene_runs.status 长度 21 超 VARCHAR(20) 已改 30）；未测：服务器 Docker 构建（本次部署已实际构建通过，补上）、HA 已配置路径、MQTT 发布、RBAC 真实鉴权、并发/压力。
+
+**本次改动文件：** apps/api 全模块（main.py/db.py/errors.py/auth.py/services/*/integrations/*/routers/*，Dockerfile 加 chmod）、apps/web 14 路由；VERSION 仍 "0.1.0"（API 子代理按最严格字面理解未动版本号；升 1.0.0 需单独确认）。
 
 ## 待办（Stage 1 剩余）
 
