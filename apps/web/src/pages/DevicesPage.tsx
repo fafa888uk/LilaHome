@@ -17,8 +17,7 @@ const DEVICE_TYPES = [
   'climate',
   'water_heater',
   'speaker',
-  'sensor',
-  'switch',
+  'router',
   'other',
 ]
 
@@ -26,6 +25,38 @@ type LoadState =
   | { kind: 'loading' }
   | { kind: 'error'; message: string }
   | { kind: 'ok'; devices: Device[]; rooms: Room[] }
+
+/** 把后端返回的错误转成可读文案：FastAPI 校验错误会把 detail 数组拼进
+ *  message 里（如 "参数校验失败 [{...}]（validation_error）"），直接贴出来
+ *  用户看不懂；这里只保留前缀与每项的字段名 + 原因，不贴原始 JSON。 */
+function readableError(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err)
+  const start = raw.indexOf('[')
+  const end = raw.lastIndexOf(']')
+  if (start >= 0 && end > start) {
+    const prefix = raw.slice(0, start).trim()
+    try {
+      const items = JSON.parse(raw.slice(start, end + 1)) as Array<{
+        loc?: unknown
+        msg?: string
+      }>
+      if (Array.isArray(items) && items.length > 0) {
+        const parts = items.map((it) => {
+          const loc = Array.isArray(it.loc)
+            ? it.loc.filter((x) => x !== 'body').join('.')
+            : ''
+          const msg = typeof it.msg === 'string' && it.msg.length > 0 ? it.msg : '参数错误'
+          return loc ? `${loc}：${msg}` : msg
+        })
+        return [prefix, parts.join('；')].filter(Boolean).join(' ')
+      }
+    } catch {
+      // 解析失败则去掉 JSON 部分，只留前缀。
+    }
+    return prefix || '提交失败，请检查输入'
+  }
+  return raw
+}
 
 export default function DevicesPage() {
   const [state, setState] = useState<LoadState>({ kind: 'loading' })
@@ -77,7 +108,7 @@ export default function DevicesPage() {
         load()
       })
       .catch((err: unknown) => {
-        setFormError(err instanceof Error ? err.message : String(err))
+        setFormError(readableError(err))
       })
       .finally(() => setSubmitting(false))
   }

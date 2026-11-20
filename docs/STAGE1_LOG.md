@@ -131,3 +131,19 @@
   - 清理：两轮测试账号均已 DELETE（users 计数 0），status 回到 {"setup_required":true}，首次设置留给用户本人；审计日志保留真实记录（auth.setup 2、auth.login 5、auth.login_failed 24、auth.change_password 2）。
   - 前端：公网 / 与 /login 均为 200；已部署 bundle（assets/index-BjqUmfCV.js）含“创建管理员账号”文案。
 - 待用户操作：打开 http://3.12.156.80/，在首次设置页建管理员账号（用户名+密码，最短 8 位）。DNS + HTTPS 仍待办。
+
+## 设备登记 422 修复（2026-11-20 23:35，线上 bug）
+
+- 现象：用户手机点“登记设备”报 422，`[{"loc":"body.device_type","msg":"Field required","type":"missing"}]`。
+- 根因：后端 DeviceCreate/DeviceUpdate 只认 `device_type`，前端发的是 `type`（api.ts 的 CreateDeviceBody 与 DevicesPage 均如此）。
+- 修复（apps/api/routers/devices.py，pydantic 2.14.4）：DeviceCreate 与 DeviceUpdate 的 device_type 加 `Field(validation_alias=AliasChoices("device_type", "type"))` + `populate_by_name=True`；两个字段同时出现时以 device_type 为准；入库仍用 device_type。
+- 前端（apps/web/src/pages/DevicesPage.tsx）：红色错误框加 readableError，只显示可读文案（前缀 + 字段名：原因），不再贴后端原始 JSON 数组；提交逻辑未动。
+- 同类扫查（routers/ 全扫）：房间 create/update（name/sort_order）、场景 create/update（name/description/is_enabled/rules）、场景动作（device_id/action/params/sort_order）、命令（action/params）、auth（username/password）前后端字段名均一致，无同类问题。另发现一处同页的值域不一致：前端类型下拉含 sensor/switch，后端 DEVICE_TYPES 只接受 router/speaker/light/climate/water_heater/other（DB CHECK 约束），选 sensor/switch 会 422；已把下拉收敛为后端接受的 6 个值。
+- 部署：rsync（--exclude '.env' 等）到 /opt/lila-home，`docker compose --env-file .env up -d --build` 重建 api+web；4 容器 Up，api/db/mosquitto healthy。未动其他 10 个业务容器、未改 nginx/UFW/DNS、未重启服务器。
+- 验证（服务器本机 + 公网实测，全部通过）：pydantic 模型层 type→device_type、双字段时 device_type 优先、update 的 type→device_type 均正确；未登录新建 401；带 `type` 新建 200（device_type=speaker）；带 `device_type` 新建 200；用 `type` 更新 200（device_type 已改为 light）；两台测试设备均已删除，列表 total=0；未登录 GET 仍 401（登录保护未破坏）；公网 http://3.12.156.80/ 200、未登录新建 401、/api/health 200。测试用 JWT 为现签的 10 分钟临时 token，未建测试用户、未动用户密码。
+
+## 设备清点登记（2026-11-20 23:36，用户口述）
+
+- 用户提供 8 台设备：音响（apple，HomePod mini，speaker，次卧）、华为路由器、小米净化器、小米监控、美的空调、美的洗衣机、石头扫地机器人、苹果灯光。电脑设备只说了“主要设备还有电脑设备”，未说明台数与品牌，待问。
+- 因前端登记表单当时有 422 字段名故障（另行修复中），本批由助理直接写入数据库 devices 表（SQL 文件 /tmp/lila_devices.sql），已验证 8 行入库；型号除 HomePod mini 外均留空待补充，未编造。清单见 docs/audit/DEVICE_INVENTORY.md。
+- 接入状态：全部未接入。HomePod 在 HA 里无原生控制，仅作 Thread 中枢；其余待 HA 接入与型号级验证。

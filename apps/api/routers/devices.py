@@ -10,7 +10,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query, Request
-from pydantic import BaseModel
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from auth import require_role
 from db import parse_uuid, require_pool
@@ -23,8 +23,12 @@ router = APIRouter(prefix="/devices", tags=["devices"])
 
 
 class DeviceCreate(BaseModel):
+    # 前端发的是 `type`，后端规范字段是 `device_type`：两个名字都接受，
+    # 同时出现时以 device_type 为准；入库一律用 device_type。
+    model_config = ConfigDict(populate_by_name=True)
+
     name: str
-    device_type: str
+    device_type: str = Field(validation_alias=AliasChoices("device_type", "type"))
     room_id: str | None = None
     integration_id: str | None = None
     brand: str | None = None
@@ -32,12 +36,16 @@ class DeviceCreate(BaseModel):
 
 
 class DeviceUpdate(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     name: str | None = None
     room_id: str | None = None
     integration_id: str | None = None
     brand: str | None = None
     model: str | None = None
-    device_type: str | None = None
+    device_type: str | None = Field(
+        default=None, validation_alias=AliasChoices("device_type", "type")
+    )
     compatibility_grade: str | None = None
     is_online: bool | None = None
 
