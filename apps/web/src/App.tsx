@@ -9,6 +9,14 @@ import {
   useLocation,
   useNavigate,
 } from 'react-router-dom'
+import {
+  House,
+  LayoutGrid,
+  Lightbulb,
+  LogOut,
+  Settings,
+  Thermometer,
+} from 'lucide-react'
 import ClimatePage from './pages/ClimatePage'
 import DeviceDetailPage from './pages/DeviceDetailPage'
 import DevicesPage from './pages/DevicesPage'
@@ -37,10 +45,25 @@ const NAV = [
   { to: '/status', label: '系统状态' },
 ]
 
+/** 手机端底部玻璃 dock：只放五个最常用入口，其余走首页九大模块。 */
+const DOCK_NAV = [
+  { to: '/', label: '首页', icon: House },
+  { to: '/devices', label: '设备', icon: LayoutGrid },
+  { to: '/lights', label: '灯光', icon: Lightbulb },
+  { to: '/climate', label: '空调', icon: Thermometer },
+  { to: '/settings', label: '设置', icon: Settings },
+]
+
 function navClass(active: boolean) {
   return active
-    ? 'rounded-lg bg-violet-500/20 px-3 py-1.5 text-sm text-violet-200'
-    : 'rounded-lg px-3 py-1.5 text-sm text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+    ? 'rounded-xl bg-violet-500/25 px-3 py-1.5 text-sm font-medium text-violet-200'
+    : 'rounded-xl px-3 py-1.5 text-sm text-zinc-400 transition hover:bg-white/[0.06] hover:text-zinc-200'
+}
+
+function dockClass(active: boolean) {
+  return active
+    ? 'flex flex-col items-center gap-0.5 rounded-2xl bg-violet-500/25 px-3 py-1.5 text-[11px] font-medium text-violet-200'
+    : 'flex flex-col items-center gap-0.5 rounded-2xl px-3 py-1.5 text-[11px] text-zinc-400 transition active:scale-95'
 }
 
 /** 未登录时跳回 /login；有 Token 但已过期时，后端 401 会由 api.ts 跳转。 */
@@ -86,17 +109,20 @@ function Shell() {
   const onLoginPage = location.pathname === '/login'
 
   return (
-    <div className="min-h-screen bg-[#0b0a12] text-zinc-200">
-      <header className="sticky top-0 z-10 border-b border-zinc-800 bg-[#0b0a12]/90 backdrop-blur">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
-          <Link to="/" className="text-lg font-bold tracking-tight text-white">
-            Lila Home
+    <div className="min-h-screen text-zinc-200">
+      <header className="sticky top-0 z-20 border-b border-white/[0.07] bg-[#0b0a12]/80 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
+          <Link to="/" className="flex items-center gap-2.5">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-b from-violet-500 to-violet-700 text-white shadow-[0_8px_20px_rgb(139_92_246/0.45)]">
+              <House className="h-5 w-5" />
+            </span>
+            <span className="text-lg font-bold tracking-tight text-white">Lila Home</span>
           </Link>
           <span className="hidden text-xs text-zinc-500 sm:inline">
             紫序智能家居控制中心
           </span>
           {me && !onLoginPage && (
-            <nav className="ml-auto flex flex-wrap items-center gap-1">
+            <nav className="ml-auto hidden items-center gap-1 md:flex">
               {NAV.map((item) => (
                 <NavLink
                   key={item.to}
@@ -110,26 +136,28 @@ function Shell() {
             </nav>
           )}
           {me && (
-            <div className="ml-auto flex items-center gap-3">
-              <span className="text-sm text-zinc-400">
+            <div className="ml-auto flex items-center gap-2 md:ml-0">
+              <span className="rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1 text-xs text-zinc-300">
                 {me.username}
-                <span className="ml-1 text-xs text-zinc-500">
+                <span className="ml-1 text-zinc-500">
                   ({me.role === 'owner' ? '管理员' : me.role})
                 </span>
               </span>
               <button
                 type="button"
                 onClick={logout}
-                className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-700"
+                aria-label="退出登录"
+                className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.05] px-3 py-1.5 text-sm text-zinc-200 transition hover:bg-white/10 active:scale-[0.98]"
               >
-                退出登录
+                <LogOut className="h-4 w-4" />
+                <span className="hidden sm:inline">退出</span>
               </button>
             </div>
           )}
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-5xl px-4 py-6">
+      <main className="mx-auto w-full max-w-5xl px-4 pb-28 pt-6 md:pb-10">
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/" element={guarded(<HomePage />)} />
@@ -150,12 +178,32 @@ function Shell() {
         </Routes>
       </main>
 
-      <footer className="mx-auto w-full max-w-5xl px-4 pb-8 pt-2">
-        <p className="border-t border-zinc-800 pt-4 text-xs leading-relaxed text-zinc-500">
+      <footer className="mx-auto w-full max-w-5xl px-4 pb-28 pt-2 md:pb-8">
+        <p className="border-t border-white/[0.07] pt-4 text-xs leading-relaxed text-zinc-500">
           Lila Home · 访问控制：应用内登录（JWT，7 天有效期）+ Tailscale ·
           所有状态来自后端实时返回；HA / 集成未接入时如实显示“未接入”，不展示假数据。
         </p>
       </footer>
+
+      {me && !onLoginPage && (
+        <nav
+          aria-label="主要导航"
+          className="lila-dock fixed inset-x-4 bottom-4 z-30 flex items-center justify-between px-2 py-2 md:hidden"
+          style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
+        >
+          {DOCK_NAV.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.to === '/'}
+              className={({ isActive }) => dockClass(isActive)}
+            >
+              <item.icon className="h-5 w-5" />
+              {item.label}
+            </NavLink>
+          ))}
+        </nav>
+      )}
     </div>
   )
 }

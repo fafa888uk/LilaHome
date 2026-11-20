@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { createDevice, listDevices, listRooms } from '../lib/api'
 import type { Device, Room } from '../lib/api'
 import { DEVICE_TYPES, deviceTypeLabel } from '../lib/deviceTypes'
 import {
-  btnPrimary,
+  ComputerCard,
+  DeviceTile,
   EmptyState,
   ErrorBanner,
+  btnPrimary,
   inputClass,
+  isComputer,
   labelClass,
   Loading,
   PageHeader,
@@ -128,7 +130,7 @@ export default function DevicesPage() {
       {showForm && (
         <form
           onSubmit={submit}
-          className="mt-6 space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/70 px-5 py-5"
+          className="lila-card mt-6 space-y-4 px-5 py-5"
         >
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
@@ -218,33 +220,20 @@ export default function DevicesPage() {
       )}
 
       {state.kind === 'ok' && state.devices.length > 0 && (
-        <ul className="mt-6 space-y-3">
-          {state.devices.map((d) => (
-            <li
-              key={d.id}
-              className="rounded-2xl border border-zinc-800 bg-zinc-900/70 px-5 py-4"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <Link to={`/devices/${encodeURIComponent(d.id)}`} className="font-semibold text-white hover:text-violet-300">
-                  {d.name}
-                </Link>
-                <span className="rounded-full border border-zinc-500/40 bg-zinc-500/10 px-2.5 py-0.5 text-xs text-zinc-400">
-                  未接入
-                </span>
-              </div>
-              <p className="mt-2 text-sm leading-relaxed text-zinc-400">
-                {[d.brand, d.model].filter(Boolean).join(' ') || '品牌 / 型号未填写'}
-                {' · '}
-                {deviceTypeLabel(d.type)}
-                {' · '}
-                {roomName(d)}
-              </p>
-              {d.integration ? (
-                <p className="mt-1 text-xs text-zinc-500">集成：{d.integration}</p>
-              ) : null}
-            </li>
-          ))}
-        </ul>
+        <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {state.devices.map((d) =>
+            isComputer(d) ? (
+              <ComputerCard key={d.id} device={d} />
+            ) : (
+              <DeviceTile
+                key={d.id}
+                device={d}
+                roomName={roomName(d)}
+                to={`/devices/${encodeURIComponent(d.id)}`}
+              />
+            ),
+          )}
+        </div>
       )}
     </div>
   )

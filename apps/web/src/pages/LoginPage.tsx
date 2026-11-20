@@ -83,7 +83,7 @@ export default function LoginPage() {
 
       <form
         onSubmit={submit}
-        className="mt-6 space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/70 px-5 py-6"
+        className="mt-6 space-y-4 lila-card px-5 py-6"
       >
         <div>
           <label className={labelClass} htmlFor="login-username">

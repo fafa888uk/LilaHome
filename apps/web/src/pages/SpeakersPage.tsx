@@ -93,7 +93,7 @@ export default function SpeakersPage() {
           {speakers.map((s) => (
             <li
               key={deviceIdOf(s)}
-              className="rounded-2xl border border-zinc-800 bg-zinc-900/70 px-5 py-4"
+              className="lila-card px-5 py-4"
             >
               <p className="font-semibold text-white">{s.name}</p>
               <p className="mt-2 text-sm leading-relaxed text-zinc-400">
@@ -114,7 +114,7 @@ export default function SpeakersPage() {
         </ul>
       )}
 
-      <section className="mt-8 rounded-2xl border border-zinc-800 bg-zinc-900/70 px-5 py-5">
+      <section className="mt-8 lila-card px-5 py-5">
         <h2 className="text-base font-semibold text-white">TTS 播报</h2>
         <p className="mt-1 text-sm leading-relaxed text-zinc-400">
           {speakers.length === 0

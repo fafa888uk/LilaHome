@@ -107,7 +107,7 @@ export default function SettingsPage() {
           修改当前登录账号的密码（新密码最短 8 位）。修改后之前签发的 Token 仍有效到过期。
         </p>
         <form
-          className="mt-3 max-w-md space-y-3 rounded-2xl border border-zinc-800 bg-zinc-900/70 px-5 py-4"
+          className="mt-3 max-w-md space-y-3 lila-card px-5 py-4"
           onSubmit={async (e) => {
             e.preventDefault()
             setPwMessage(null)
@@ -213,7 +213,7 @@ export default function SettingsPage() {
             {users.users.map((u) => (
               <li
                 key={u.id}
-                className="rounded-2xl border border-zinc-800 bg-zinc-900/70 px-5 py-4"
+                className="lila-card px-5 py-4"
               >
                 <p className="font-semibold text-white">
                   {u.username ?? u.name ?? u.email ?? u.id}
@@ -253,7 +253,7 @@ export default function SettingsPage() {
               {logs.logs.map((log, i) => (
                 <li
                   key={log.id ?? `${log.created_at ?? log.timestamp ?? ''}-${i}`}
-                  className="rounded-2xl border border-zinc-800 bg-zinc-900/70 px-5 py-4"
+                  className="lila-card px-5 py-4"
                 >
                   <p className="text-sm text-zinc-100">
                     <span className="font-semibold">{toDisplayText(log.action)}</span>
@@ -322,7 +322,7 @@ export default function SettingsPage() {
               return (
               <li
                 key={item.id ?? item.name ?? `integration-${i}`}
-                className="rounded-2xl border border-zinc-800 bg-zinc-900/70 px-5 py-4"
+                className="lila-card px-5 py-4"
               >
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <p className="font-semibold text-white">{item.name}</p>

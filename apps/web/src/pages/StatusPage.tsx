@@ -119,7 +119,7 @@ export default function StatusPage() {
       </p>
 
       {state.kind === 'loading' && (
-        <p className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-900/70 px-5 py-6 text-sm text-zinc-400">
+        <p className="mt-6 lila-card px-5 py-6 text-sm text-zinc-400">
           正在检查后端状态……
         </p>
       )}
@@ -138,7 +138,7 @@ export default function StatusPage() {
 
       {state.kind === 'ok' && (
         <div className="mt-6 space-y-4">
-          <div className="flex items-center gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/70 px-5 py-4">
+          <div className="flex items-center gap-3 lila-card px-5 py-4">
             <span className="text-sm text-zinc-400">总体状态</span>
             <span className={`rounded-full border px-2.5 py-0.5 text-sm ${badge(state.status)}`}>
               {state.status}
@@ -150,7 +150,7 @@ export default function StatusPage() {
               {state.checks.map((check) => (
                 <li
                   key={check.name}
-                  className="rounded-2xl border border-zinc-800 bg-zinc-900/70 px-5 py-4"
+                  className="lila-card px-5 py-4"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="font-semibold text-white">{check.name}</span>
@@ -165,12 +165,12 @@ export default function StatusPage() {
               ))}
             </ul>
           ) : (
-            <p className="rounded-2xl border border-zinc-800 bg-zinc-900/70 px-5 py-4 text-sm text-zinc-400">
+            <p className="lila-card px-5 py-4 text-sm text-zinc-400">
               后端未返回检查项列表，原始返回如下。
             </p>
           )}
 
-          <details className="rounded-2xl border border-zinc-800 bg-zinc-900/70 px-5 py-4">
+          <details className="lila-card px-5 py-4">
             <summary className="cursor-pointer text-sm font-semibold text-zinc-200">
               原始返回 JSON
             </summary>

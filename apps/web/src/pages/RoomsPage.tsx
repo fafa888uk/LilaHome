@@ -101,7 +101,7 @@ export default function RoomsPage() {
 
       <form
         onSubmit={submitNew}
-        className="mt-6 flex flex-col gap-2 rounded-2xl border border-zinc-800 bg-zinc-900/70 px-5 py-4 sm:flex-row sm:items-center"
+        className="mt-6 flex flex-col gap-2 lila-card px-5 py-4 sm:flex-row sm:items-center"
       >
         <input
           className={inputClass}
@@ -137,7 +137,7 @@ export default function RoomsPage() {
           {state.rooms.map((room) => (
             <li
               key={room.id}
-              className="rounded-2xl border border-zinc-800 bg-zinc-900/70 px-5 py-4"
+              className="lila-card px-5 py-4"
             >
               {editingId === room.id ? (
                 <form

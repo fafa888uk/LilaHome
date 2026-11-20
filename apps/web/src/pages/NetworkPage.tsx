@@ -59,7 +59,7 @@ export default function NetworkPage() {
           {state.devices.map((d, i) => (
             <li
               key={d.mac ?? d.ip ?? d.id ?? `net-${i}`}
-              className="rounded-2xl border border-zinc-800 bg-zinc-900/70 px-5 py-4"
+              className="lila-card px-5 py-4"
             >
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <p className="font-semibold text-white">

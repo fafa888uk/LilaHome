@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Lightbulb } from 'lucide-react'
 import { commandStatusText, listLights, sendDeviceCommand } from '../lib/api'
 import type { Light } from '../lib/api'
 import {
@@ -101,24 +102,36 @@ export default function LightsPage() {
 
       {state.kind === 'ok' && state.lights.length > 0 && (
         <ul className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {state.lights.map((light) => {
+          {state.lights.map((light, i) => {
             const id = deviceIdOf(light)
             const slider = sliders[id] ?? { brightness: 100, colorTemp: 4000 }
             const note = notes[id]
             return (
               <li
                 key={id}
-                className="rounded-2xl border border-zinc-800 bg-zinc-900/70 px-5 py-4"
+                className="lila-card animate-fade-up px-5 py-4"
+                style={{ animationDelay: `${i * 40}ms` }}
               >
                 <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div>
-                    <p className="font-semibold text-white">{light.name}</p>
-                    <p className="mt-1 text-xs text-zinc-500">
-                      {light.room_name ?? '未分组'}
-                      {typeof light.on === 'boolean'
-                        ? ` · ${light.on ? '开' : '关'}（最后已知状态）`
-                        : ' · 开关状态后端未返回'}
-                    </p>
+                  <div className="flex items-start gap-3">
+                    <span
+                      className={`lila-icon-tile h-11 w-11 p-2.5 ${
+                        light.on
+                          ? 'bg-amber-400/15 text-amber-300'
+                          : 'bg-zinc-400/10 text-zinc-400'
+                      }`}
+                    >
+                      <Lightbulb className="h-5 w-5" />
+                    </span>
+                    <div>
+                      <p className="font-semibold text-white">{light.name}</p>
+                      <p className="mt-1 text-xs text-zinc-500">
+                        {light.room_name ?? '未分组'}
+                        {typeof light.on === 'boolean'
+                          ? ` · ${light.on ? '开' : '关'}（最后已知状态）`
+                          : ' · 开关状态后端未返回'}
+                      </p>
+                    </div>
                   </div>
                   <button
                     type="button"
@@ -147,7 +160,7 @@ export default function LightsPage() {
                       min={1}
                       max={100}
                       value={slider.brightness}
-                      className="w-full accent-violet-400"
+                      className="lila-range"
                       onChange={(e) =>
                         setSliders((prev) => ({
                           ...prev,
@@ -177,7 +190,7 @@ export default function LightsPage() {
                       max={6500}
                       step={100}
                       value={slider.colorTemp}
-                      className="w-full accent-violet-400"
+                      className="lila-range"
                       onChange={(e) =>
                         setSliders((prev) => ({
                           ...prev,
@@ -195,7 +208,7 @@ export default function LightsPage() {
                 </div>
 
                 {note ? (
-                  <p className="mt-4 flex flex-wrap items-center gap-2 rounded-lg border border-zinc-700 bg-black/30 px-3 py-2 text-sm">
+                  <p className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm">
                     <StatusBadge status={note.status} />
                     <span className="text-zinc-300">
                       {note.status === 'ERROR'

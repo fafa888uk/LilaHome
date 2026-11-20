@@ -128,7 +128,7 @@ export default function ScenesPage() {
 
       <form
         onSubmit={submitNew}
-        className="mt-6 space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/70 px-5 py-5"
+        className="mt-6 space-y-4 lila-card px-5 py-5"
       >
         <h2 className="text-base font-semibold text-white">新增场景</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -192,7 +192,7 @@ export default function ScenesPage() {
           {state.scenes.map((scene) => (
             <li
               key={scene.id}
-              className="rounded-2xl border border-zinc-800 bg-zinc-900/70 px-5 py-4"
+              className="lila-card px-5 py-4"
             >
               {editingId === scene.id ? (
                 <form
