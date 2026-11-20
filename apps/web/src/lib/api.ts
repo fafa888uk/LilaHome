@@ -14,10 +14,12 @@
  *   （results 或 devices/steps，字段 device_id/device_name/action/status/detail）。
  * - 错误体统一 { code, message, detail }（API_DESIGN §1）；非 2xx 时抛出
  *   带 message 的 Error，调用方如实展示，不展示假数据。
- * - 认证未落地：当前不带任何 Token，全部请求按 Owner 放行（见设置页说明）。
+ * - 认证：JWT 存在 localStorage（键 lila_token），每次请求自动带
+ *   Authorization: Bearer 头；后端返回 401 时清 Token 并跳回 /login。
+ *   首次使用需在 /login 建 owner 账号（后端 /auth/setup）。
  *
  * 优先级：环境变量 VITE_API_URL（部署时覆盖）> 与页面同主机、8001 端口。
- * 不写死任何 IP 地址；v0.1 的访问控制由 Tailscale 承担，前端不做应用内登录。
+ * 不写死任何 IP 地址；公网访问时前端经同源 /api 代理调后端。
  */
 export function getApiBaseUrl(): string {
   const fromEnv = import.meta.env.VITE_API_URL as string | undefined
@@ -29,6 +31,34 @@ export function getApiBaseUrl(): string {
 
 export function getHealthUrl(): string {
   return `${getApiBaseUrl()}/health`
+}
+
+/* ---------- 认证 Token ---------- */
+
+const TOKEN_KEY = 'lila_token'
+
+export function getToken(): string | null {
+  try {
+    return window.localStorage.getItem(TOKEN_KEY)
+  } catch {
+    return null
+  }
+}
+
+export function setToken(token: string): void {
+  try {
+    window.localStorage.setItem(TOKEN_KEY, token)
+  } catch {
+    // 存储不可用时忽略，请求将无 Token，后端返回 401。
+  }
+}
+
+export function clearToken(): void {
+  try {
+    window.localStorage.removeItem(TOKEN_KEY)
+  } catch {
+    // 忽略。
+  }
 }
 
 /* ---------- 通用 ---------- */
@@ -77,13 +107,38 @@ function errorDetailText(detail: unknown): string {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response
+  const token = getToken()
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...((init?.headers as Record<string, string> | undefined) ?? {}),
+  }
+  if (token) headers['Authorization'] = `Bearer ${token}`
   try {
     res = await fetch(`${getApiBaseUrl()}${path}`, {
-      headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
       ...init,
+      headers,
     })
   } catch (err: unknown) {
     throw new Error(`无法连接后端 API：${errorMessage(err)}`)
+  }
+  if (res.status === 401) {
+    // 未登录或登录过期：清 Token；不在登录页时跳回登录页。
+    // 登录页本身的 401（如密码错误）保留后端原文，不跳转。
+    let message = '登录已过期，请重新登录'
+    try {
+      const body: unknown = await res.json()
+      if (typeof body === 'object' && body !== null) {
+        const b = body as Record<string, unknown>
+        if (typeof b.message === 'string' && b.message) message = b.message
+      }
+    } catch {
+      // 解析失败时保留默认文案。
+    }
+    if (window.location.pathname !== '/login') {
+      clearToken()
+      window.location.href = '/login'
+    }
+    throw new Error(message)
   }
   if (!res.ok) {
     let message = `后端返回 HTTP ${res.status}`
@@ -282,11 +337,29 @@ export interface SceneRun {
 
 export interface AppUser {
   id: string
+  username?: string | null
   name?: string | null
   email?: string | null
   role?: string | null
   roles?: string[] | null
   created_at?: string | null
+}
+
+export interface AuthStatus {
+  setup_required: boolean
+}
+
+export interface AuthUser {
+  id: string
+  username: string
+  role: string
+}
+
+export interface AuthResult {
+  token: string
+  token_type?: string
+  expires_in?: number
+  user: AuthUser
 }
 
 export interface AuditLog {
@@ -616,6 +689,37 @@ export async function getSceneRun(id: string, runId: string): Promise<SceneRun> 
 }
 
 /* ---------- 系统 ---------- */
+
+/* ---------- 认证 ---------- */
+
+export async function fetchAuthStatus(): Promise<AuthStatus> {
+  return get<AuthStatus>('/api/v1/auth/status')
+}
+
+export async function setupOwner(body: {
+  username: string
+  password: string
+}): Promise<AuthResult> {
+  return send<AuthResult>('POST', '/api/v1/auth/setup', body)
+}
+
+export async function login(body: {
+  username: string
+  password: string
+}): Promise<AuthResult> {
+  return send<AuthResult>('POST', '/api/v1/auth/login', body)
+}
+
+export async function fetchMe(): Promise<AuthUser> {
+  return get<AuthUser>('/api/v1/auth/me')
+}
+
+export async function changePassword(body: {
+  current_password: string
+  new_password: string
+}): Promise<void> {
+  await send<void>('POST', '/api/v1/auth/change-password', body)
+}
 
 export async function listUsers(): Promise<AppUser[]> {
   return asList<AppUser>(await get<unknown>('/api/v1/users'))

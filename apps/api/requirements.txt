@@ -2,3 +2,5 @@ fastapi>=0.110,<1
 uvicorn>=0.29,<1
 asyncpg>=0.29,<1
 paho-mqtt>=2.0,<3
+argon2-cffi>=23,<25
+PyJWT>=2.8,<3

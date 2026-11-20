@@ -63,6 +63,7 @@ services:
       PGDATABASE: lila_home
       MQTT_HOST: mosquitto
       MQTT_PORT: 1883
+      LILA_JWT_SECRET: ${LILA_JWT_SECRET:?LILA_JWT_SECRET 未设置}
     ports:
       - "100.114.133.80:8001:8000"
     depends_on:

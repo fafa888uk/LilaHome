@@ -114,7 +114,7 @@ async def list_users(request: Request):
     pool = require_pool(request)
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            "SELECT id, email, display_name, is_owner, is_active,"
+            "SELECT id, username, role, email, display_name, is_owner, is_active,"
             " created_at, updated_at, deleted_at FROM users"
             " WHERE deleted_at IS NULL ORDER BY created_at ASC"
         )

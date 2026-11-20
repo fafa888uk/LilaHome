@@ -23,15 +23,22 @@ from errors import db_unavailable
 DDL = """
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email VARCHAR(255) UNIQUE NOT NULL,
+    username VARCHAR(100),
+    email VARCHAR(255) UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
     display_name VARCHAR(100),
+    role VARCHAR(20) NOT NULL DEFAULT 'member'
+        CHECK (role IN ('owner', 'member')),
     is_owner BOOLEAN NOT NULL DEFAULT FALSE,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     deleted_at TIMESTAMPTZ
 );
+-- 注意: username 唯一索引不在 DDL 里建: 已部署的库在 DDL 执行时
+-- username 列尚未加上 (由 init_db 迁移段后加), 在此建索引会报
+-- column "username" does not exist, 导致整个 init_db 失败、服务进无库模式。
+-- 索引统一由 init_db 迁移段在 ADD COLUMN 之后建 (新库旧库都走同一段)。
 
 CREATE TABLE IF NOT EXISTS roles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -212,6 +219,40 @@ async def init_db(pool: asyncpg.Pool) -> None:
         )
         await conn.execute(
             "ALTER TABLE device_commands ALTER COLUMN status TYPE VARCHAR(30)"
+        )
+        # 登录落地 (2026-11-20): users 表加 username/role; email 改为可空。
+        # 已部署的库用以下 ALTER 幂等迁移; 新库直接由上面 DDL 建出新结构。
+        await conn.execute(
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS username VARCHAR(100)"
+        )
+        await conn.execute(
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS"
+            " role VARCHAR(20) NOT NULL DEFAULT 'member'"
+        )
+        await conn.execute(
+            "ALTER TABLE users ALTER COLUMN email DROP NOT NULL"
+        )
+        await conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_active"
+            " ON users (username) WHERE deleted_at IS NULL"
+        )
+        await conn.execute(
+            "UPDATE users SET role = 'owner'"
+            " WHERE is_owner IS TRUE AND role <> 'owner'"
+        )
+        await conn.execute(
+            """
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_constraint
+                    WHERE conname = 'users_role_check'
+                ) THEN
+                    ALTER TABLE users ADD CONSTRAINT users_role_check
+                        CHECK (role IN ('owner', 'member'));
+                END IF;
+            END $$;
+            """
         )
         for name, description in SEED_ROLES:
             await conn.execute(

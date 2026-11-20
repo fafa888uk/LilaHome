@@ -1,10 +1,19 @@
 import { useEffect, useState } from 'react'
-import { listAuditLogs, listIntegrations, listUsers, toDisplayText } from '../lib/api'
+import {
+  changePassword,
+  listAuditLogs,
+  listIntegrations,
+  listUsers,
+  toDisplayText,
+} from '../lib/api'
 import type { AppUser, AuditLog, Integration } from '../lib/api'
 import {
+  btnPrimary,
   btnSecondary,
   EmptyState,
   ErrorBanner,
+  inputClass,
+  labelClass,
   Loading,
   PageHeader,
 } from '../components/ui'
@@ -31,6 +40,12 @@ export default function SettingsPage() {
   const [logs, setLogs] = useState<LogsState>({ kind: 'loading' })
   const [integrations, setIntegrations] = useState<IntegrationsState>({ kind: 'loading' })
   const [page, setPage] = useState(1)
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [pwMessage, setPwMessage] = useState<string | null>(null)
+  const [pwError, setPwError] = useState<string | null>(null)
+  const [pwBusy, setPwBusy] = useState(false)
 
   const loadUsers = () => {
     setUsers({ kind: 'loading' })
@@ -83,13 +98,107 @@ export default function SettingsPage() {
     <div>
       <PageHeader
         title="系统安全与设置中心"
-        description="用户、审计日志与接入状态均来自后端。登录未落地：当前为 RBAC 脚手架，全部请求按 Owner 放行；用户与角色管理仅 Owner 可见的正式能力待登录落地后启用。"
+        description="用户、审计日志与接入状态均来自后端。登录已启用：全部接口要求 JWT，管理员（owner）可管理设备、房间、场景与集成，成员（member）可控制设备与执行场景。"
       />
 
       <section className="mt-6">
-        <h2 className="text-base font-semibold text-zinc-200">用户与角色（RBAC 脚手架）</h2>
+        <h2 className="text-base font-semibold text-zinc-200">修改密码</h2>
         <p className="mt-1 text-sm leading-relaxed text-zinc-400">
-          登录未落地，当前为脚手架：全部请求按 Owner 放行，本页只展示用户列表，不提供改角色、重置密码等写操作。
+          修改当前登录账号的密码（新密码最短 8 位）。修改后之前签发的 Token 仍有效到过期。
+        </p>
+        <form
+          className="mt-3 max-w-md space-y-3 rounded-2xl border border-zinc-800 bg-zinc-900/70 px-5 py-4"
+          onSubmit={async (e) => {
+            e.preventDefault()
+            setPwMessage(null)
+            setPwError(null)
+            if (newPassword.length < 8) {
+              setPwError('新密码最短 8 位。')
+              return
+            }
+            if (newPassword !== confirmPassword) {
+              setPwError('两次输入的新密码不一致。')
+              return
+            }
+            setPwBusy(true)
+            try {
+              await changePassword({
+                current_password: currentPassword,
+                new_password: newPassword,
+              })
+              setCurrentPassword('')
+              setNewPassword('')
+              setConfirmPassword('')
+              setPwMessage('密码已修改。')
+            } catch (err: unknown) {
+              setPwError(err instanceof Error ? err.message : String(err))
+            } finally {
+              setPwBusy(false)
+            }
+          }}
+        >
+          <div>
+            <label className={labelClass} htmlFor="pw-current">
+              当前密码
+            </label>
+            <input
+              id="pw-current"
+              type="password"
+              className={inputClass}
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              autoComplete="current-password"
+              maxLength={128}
+            />
+          </div>
+          <div>
+            <label className={labelClass} htmlFor="pw-new">
+              新密码（最短 8 位）
+            </label>
+            <input
+              id="pw-new"
+              type="password"
+              className={inputClass}
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              autoComplete="new-password"
+              maxLength={128}
+            />
+          </div>
+          <div>
+            <label className={labelClass} htmlFor="pw-confirm">
+              再输一次新密码
+            </label>
+            <input
+              id="pw-confirm"
+              type="password"
+              className={inputClass}
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              autoComplete="new-password"
+              maxLength={128}
+            />
+          </div>
+          {pwError && (
+            <p className="rounded-lg border border-red-400/40 bg-red-400/10 px-3 py-2 text-sm text-red-200">
+              {pwError}
+            </p>
+          )}
+          {pwMessage && (
+            <p className="rounded-lg border border-emerald-400/40 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-200">
+              {pwMessage}
+            </p>
+          )}
+          <button type="submit" className={btnPrimary} disabled={pwBusy}>
+            {pwBusy ? '请稍候……' : '修改密码'}
+          </button>
+        </form>
+      </section>
+
+      <section className="mt-8">
+        <h2 className="text-base font-semibold text-zinc-200">用户与角色</h2>
+        <p className="mt-1 text-sm leading-relaxed text-zinc-400">
+          来自 GET /api/v1/users。第一个账号为管理员（owner），其余账号为成员（member）。
         </p>
         {users.kind === 'loading' && <Loading />}
         {users.kind === 'error' && <ErrorBanner message={users.message} onRetry={loadUsers} />}
@@ -107,13 +216,18 @@ export default function SettingsPage() {
                 className="rounded-2xl border border-zinc-800 bg-zinc-900/70 px-5 py-4"
               >
                 <p className="font-semibold text-white">
-                  {u.name ?? u.email ?? u.id}
+                  {u.username ?? u.name ?? u.email ?? u.id}
                 </p>
                 <p className="mt-1 text-sm text-zinc-400">
-                  邮箱：{toDisplayText(u.email)} · 角色：
-                  {u.roles && u.roles.length > 0
-                    ? u.roles.join('、')
-                    : toDisplayText(u.role)}
+                  角色：
+                  {u.role
+                    ? u.role === 'owner'
+                      ? '管理员'
+                      : u.role
+                    : u.roles && u.roles.length > 0
+                      ? u.roles.join('、')
+                      : '—'}
+                  {u.email ? ` · 邮箱：${toDisplayText(u.email)}` : ''}
                 </p>
               </li>
             ))}

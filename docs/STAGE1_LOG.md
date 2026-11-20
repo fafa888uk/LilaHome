@@ -116,3 +116,18 @@
 - 验证（非 tailnet 的本机 VM 实测）：http://3.12.156.80/ 返回 200，标题 Lila Home；/api/health 返回 ok JSON（数据库 ok、MQTT ok、HA 未接入）；/api/api/v1/status 返回 200（注意：代理会去掉 /api 前缀，前端调的就是这条路径）。Tailscale http://100.114.133.80:3001/ 仍为 200；ai/dy 站点仍为 200，无回归。
 - 现状：公网地址 http://3.12.156.80/（HTTP，无登录、无 HTTPS）；3001 端口安全组仍未放行（未动 AWS）；lila.fafa888.uk DNS 待补（Cloudflare 登录问题解决后）。
 - 待办：给 Lila Home 加登录保护（公网已无登录开放）；补 lila.fafa888.uk DNS + HTTPS。
+
+## 登录保护落地（2026-11-20 23:19 开始，用户要求立刻补上；23:27 完成验证通过）
+
+- 后端：users 表加 username（唯一，部分索引，未删除用户内唯一）+ role（owner/member，CHECK 约束，is_owner=true 的旧行回填 owner）；密码 Argon2id（argon2-cffi，新增依赖）+ JWT HS256（PyJWT，新增依赖；密钥 LILA_JWT_SECRET 在服务器 .env 里 openssl rand -hex 32 生成，600 权限，绝不进仓库/聊天/日志）；有效期 7 天。
+- 接口：GET /api/v1/auth/status（公开，{setup_required}）；POST /api/v1/auth/setup（仅用户表为空，事务内 LOCK TABLE 防竞态，否则 403，成功即返回 JWT）；POST /api/v1/auth/login（失败统一 401 不区分原因；同一 IP 连续失败 10 次后 429 锁 5 分钟，内存计数）；GET /api/v1/auth/me；POST /api/v1/auth/change-password（需登录）。中间件：除 /health 与 /auth/status、/auth/setup、/auth/login 外，全部 /api/v1/* 要求 Bearer JWT；require_role 接到 JWT 的 role 上（owner=Owner 档可过 Admin 级写操作，member=Member 档可控制设备/执行场景）。审计记 auth.setup/auth.login/auth.login_failed/auth.change_password（只记用户名，不记密码）。
+- 前端：/login 登录页（无用户时自动变首次设置表单建 owner）；JWT 存 localStorage，请求自动带头；401 清 Token 跳回 /login；除 /login 外全部路由需登录；顶栏显示当前用户 + 退出登录；设置页加改密码表单、用户列表显示 username/role；页脚“登录模块 PLANNED”文案已改。九模块页面原样未动。
+- 部署：rsync 到 /opt/lila-home（--exclude '.env' 等）；compose api 服务加 LILA_JWT_SECRET（.env.example 同步占位符）；`up -d --build` 重建 api+web；4 容器 Up，api/db/mosquitto healthy。未动其他 10 个业务容器、未改 nginx/UFW/DNS、未重启服务器；5432/1883/8001 仍不发布。
+- 部署故障 1 项（已修）：首次重建后 /auth/status 报 503 db_unavailable，日志为 `column "username" does not exist`——DDL 里 `CREATE UNIQUE INDEX ... ON users (username)` 在已部署库上先于 ADD COLUMN 执行（DDL 的 CREATE TABLE IF NOT EXISTS 是 no-op），导致 init_db 整体失败、服务进无库模式（/health 自建连接仍 ok，故只影响业务接口）。修法：DDL 去掉建索引语句，索引统一由 init_db 迁移段在 ADD COLUMN 之后建；只重建 api 容器后恢复。
+- 验证（全部通过，服务器本机跑完整流程 17/17，公网再验关键三项）：
+  - 未登录 GET /api/v1/devices → 401 {"code":"unauthorized","message":"未登录或登录已过期"}；GET /health 仍公开 200 ok；GET /api/v1/auth/status 初始 {"setup_required":true}。
+  - 测试账号流程（两轮，第一轮在本地 VM 跑，第二轮在服务器本机跑；密码均为进程内随机生成、从未打印）：setup 200（role=owner，返回 token）、setup 后 status false、重复 setup 403、错密码 401、正确登录 200、带 token /devices 200、/auth/me 200（username=testadmin）、改密码 200、旧密码 401、新密码 200、连续 10 次错密码均为 401、第 11 次 429。
+  - 第一轮曾出现一次“锁定期内登录返回 200 而非 429”：复核为本机 VM 出口 IP 轮换导致计数键分散，非限流 bug；服务器本机（稳定来源 IP）重跑 17/17 全过，限流逻辑本身无问题。
+  - 清理：两轮测试账号均已 DELETE（users 计数 0），status 回到 {"setup_required":true}，首次设置留给用户本人；审计日志保留真实记录（auth.setup 2、auth.login 5、auth.login_failed 24、auth.change_password 2）。
+  - 前端：公网 / 与 /login 均为 200；已部署 bundle（assets/index-BjqUmfCV.js）含“创建管理员账号”文案。
+- 待用户操作：打开 http://3.12.156.80/，在首次设置页建管理员账号（用户名+密码，最短 8 位）。DNS + HTTPS 仍待办。

@@ -10,6 +10,9 @@ v0.1 两个接口的响应形状一个字不动:
 - 场景 /scenes (含动作与执行; rules 只存不执行, 执行器后续阶段接入 HA 自动化)
 - 网络只读 /network/devices、系统 /system/health、审计 /audit-logs、
   集成 /integrations、用户 /users
+- 登录鉴权 /auth (首次设置、登录、改密码、当前用户); 除 /health 与
+  /auth/status、/auth/setup、/auth/login 外, 全部 /api/v1/* 要求 Bearer JWT
+  (中间件验签, 失败 401; 未配置 LILA_JWT_SECRET 时 fail-closed)。
 
 启动时建表 (db.init_db, CREATE TABLE IF NOT EXISTS + 种子)。
 数据库未配置/连不上时以无库模式启动: /health 仍返回 degraded,
@@ -24,9 +27,12 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
+from starlette.middleware.base import BaseHTTPMiddleware
 
+from auth import decode_token
 from db import create_pool, init_db
 from errors import ApiError, error_body
+from routers import auth as auth_router
 from routers import devices as devices_router
 from routers import rooms as rooms_router
 from routers import scenes as scenes_router
@@ -34,6 +40,56 @@ from routers import system as system_router
 from services.health_checks import run_checks
 
 VERSION = "0.1.0"
+
+# 无需登录即可访问的路径: 健康检查 + 首次设置/登录三口。
+# 其余 /api/v1/* (含 /auth/me、/auth/change-password) 一律要求 Bearer JWT。
+_PUBLIC_PATHS = frozenset(
+    {
+        "/health",
+        "/api/v1/auth/status",
+        "/api/v1/auth/setup",
+        "/api/v1/auth/login",
+    }
+)
+
+
+class AuthMiddleware(BaseHTTPMiddleware):
+    """验签中间件: /api/v1/* 要求 Authorization: Bearer <JWT>。
+
+    验签通过后把 {"id","username","role"} 写进 request.state.user,
+    供 auth.get_current_user / require_role 使用。
+    公开路径直接放行; 非 /api/v1/ 路径 (如 /docs) 不拦截。
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+        if path in _PUBLIC_PATHS or not path.startswith("/api/v1/"):
+            return await call_next(request)
+        authorization = request.headers.get("authorization", "")
+        if not authorization.lower().startswith("bearer "):
+            return JSONResponse(
+                status_code=401,
+                content=error_body("unauthorized", "未登录或登录已过期", None),
+            )
+        token = authorization[7:].strip()
+        if not token:
+            return JSONResponse(
+                status_code=401,
+                content=error_body("unauthorized", "未登录或登录已过期", None),
+            )
+        try:
+            payload = decode_token(token)
+        except ApiError as exc:
+            return JSONResponse(
+                status_code=exc.status_code,
+                content=error_body(exc.code, exc.message, exc.detail),
+            )
+        request.state.user = {
+            "id": str(payload.get("sub", "")),
+            "username": str(payload.get("username", "")),
+            "role": str(payload.get("role", "")),
+        }
+        return await call_next(request)
 
 
 @asynccontextmanager
@@ -62,6 +118,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Lila Home API", version=VERSION, lifespan=lifespan)
+app.add_middleware(AuthMiddleware)
 
 
 @app.exception_handler(ApiError)
@@ -144,6 +201,7 @@ async def status() -> dict:
     }
 
 
+app.include_router(auth_router.router, prefix="/api/v1")
 app.include_router(rooms_router.router, prefix="/api/v1")
 app.include_router(devices_router.router, prefix="/api/v1")
 app.include_router(scenes_router.router, prefix="/api/v1")
