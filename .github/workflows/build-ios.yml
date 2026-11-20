@@ -44,19 +44,22 @@ jobs:
 
       - name: Build unsigned .app (no code signing)
         # 注意：生成工程里没有共享 scheme 文件（scheme 是 Xcode 首次打开时
-        # 自动生成的，不进仓库），CI 上用 -target App 而不用 -scheme App。
+        # 自动生成的，不进仓库），故用 -target App 而不用 -scheme App。
+        # archive 动作配 -archivePath 时 Xcode 强制要求 -scheme（CI 报错
+        # exit 64），因此改用 build 动作（不需要 scheme），产物在
+        # DerivedData 的 Build/Products/Release-iphoneos/App.app。
         working-directory: apps/web
         run: |
           xcodebuild -project ios/App/App.xcodeproj \
             -target App \
             -configuration Release \
-            -destination 'generic/platform=iOS' \
-            -archivePath "$RUNNER_TEMP/LilaHome.xcarchive" \
-            archive CODE_SIGNING_ALLOWED=NO
+            -sdk iphoneos \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            build CODE_SIGNING_ALLOWED=NO
 
       - name: Package unsigned IPA
         run: |
-          APP_PATH="$RUNNER_TEMP/LilaHome.xcarchive/Products/Applications/App.app"
+          APP_PATH="$RUNNER_TEMP/DerivedData/Build/Products/Release-iphoneos/App.app"
           test -d "$APP_PATH" || { echo "App.app not found at $APP_PATH"; exit 1; }
           mkdir -p "$RUNNER_TEMP/Payload"
           cp -R "$APP_PATH" "$RUNNER_TEMP/Payload/"
