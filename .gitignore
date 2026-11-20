@@ -15,6 +15,12 @@ __pycache__/
 venv/
 *.egg-info/
 
+# Capacitor 生成物（构建时由 CI/本地重新生成，不提交）
+apps/web/ios/App/App/public/
+apps/web/ios/App/Pods/
+apps/web/ios/App/*.xcworkspace/xcuserdata/
+apps/web/ios/App/*.xcodeproj/xcuserdata/
+
 # 环境变量与秘密（绝不提交）
 .env
 .env.*

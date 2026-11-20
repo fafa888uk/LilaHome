@@ -20,6 +20,7 @@ import {
   PageHeader,
   StatusBadge,
 } from '../components/ui'
+import { deviceTypeLabel } from '../lib/deviceTypes'
 
 type LoadState =
   | { kind: 'loading' }
@@ -142,7 +143,7 @@ export default function DeviceDetailPage() {
               </div>
               <div className="flex gap-2">
                 <dt className="w-20 shrink-0 text-zinc-500">类型</dt>
-                <dd className="text-zinc-200">{toDisplayText(state.device.type)}</dd>
+                <dd className="text-zinc-200">{deviceTypeLabel(state.device.type)}</dd>
               </div>
               <div className="flex gap-2">
                 <dt className="w-20 shrink-0 text-zinc-500">集成</dt>

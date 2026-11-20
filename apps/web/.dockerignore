@@ -1,0 +1,6 @@
+# Web 镜像构建上下文排除项。
+# ios/ 是 Capacitor 原生工程（只在 macOS CI 上用），不需要进 Web 镜像；
+# node_modules / dist 由构建阶段自行生成。
+node_modules
+dist
+ios

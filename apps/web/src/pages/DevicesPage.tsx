@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { createDevice, listDevices, listRooms } from '../lib/api'
 import type { Device, Room } from '../lib/api'
+import { DEVICE_TYPES, deviceTypeLabel } from '../lib/deviceTypes'
 import {
   btnPrimary,
   EmptyState,
@@ -11,15 +12,6 @@ import {
   Loading,
   PageHeader,
 } from '../components/ui'
-
-const DEVICE_TYPES = [
-  'light',
-  'climate',
-  'water_heater',
-  'speaker',
-  'router',
-  'other',
-]
 
 type LoadState =
   | { kind: 'loading' }
@@ -64,7 +56,7 @@ export default function DevicesPage() {
   const [name, setName] = useState('')
   const [brand, setBrand] = useState('')
   const [model, setModel] = useState('')
-  const [type, setType] = useState(DEVICE_TYPES[0])
+  const [type, setType] = useState<string>(DEVICE_TYPES[0])
   const [roomId, setRoomId] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -179,7 +171,7 @@ export default function DevicesPage() {
               >
                 {DEVICE_TYPES.map((t) => (
                   <option key={t} value={t}>
-                    {t}
+                    {deviceTypeLabel(t)}
                   </option>
                 ))}
               </select>
@@ -243,7 +235,7 @@ export default function DevicesPage() {
               <p className="mt-2 text-sm leading-relaxed text-zinc-400">
                 {[d.brand, d.model].filter(Boolean).join(' ') || '品牌 / 型号未填写'}
                 {' · '}
-                {d.type ?? '类型未填写'}
+                {deviceTypeLabel(d.type)}
                 {' · '}
                 {roomName(d)}
               </p>

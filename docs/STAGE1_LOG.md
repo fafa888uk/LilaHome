@@ -147,3 +147,25 @@
 - 用户提供 8 台设备：音响（apple，HomePod mini，speaker，次卧）、华为路由器、小米净化器、小米监控、美的空调、美的洗衣机、石头扫地机器人、苹果灯光。电脑设备只说了“主要设备还有电脑设备”，未说明台数与品牌，待问。
 - 因前端登记表单当时有 422 字段名故障（另行修复中），本批由助理直接写入数据库 devices 表（SQL 文件 /tmp/lila_devices.sql），已验证 8 行入库；型号除 HomePod mini 外均留空待补充，未编造。清单见 docs/audit/DEVICE_INVENTORY.md。
 - 接入状态：全部未接入。HomePod 在 HA 里无原生控制，仅作 Thread 中枢；其余待 HA 接入与型号级验证。
+
+- 电脑设备已补登记（2026-11-20 23:39）：用户确认 Windows 台式自配组装 1 台，已入库（9 台）。
+- 设备登记 422 修复已部署并验证（见“设备登记 422 修复”一节），修复提交 b290ca9a 已推 GitHub main。
+
+## 类型中文展示（2026-11-20 23:45，用户要求“所有类型目录全部为中文”）
+
+- 做法：新增 apps/web/src/lib/deviceTypes.ts（DEVICE_TYPES 英文值 + DEVICE_TYPE_LABELS 中文映射：router 路由器、speaker 音响、light 灯光、climate 空调、water_heater 热水器、other 其他 + deviceTypeLabel()）；DevicesPage 表单下拉与列表类型列、DeviceDetailPage 类型行改用中文展示。提交时仍发英文值（type=speaker），后端与数据库完全不动（DB CHECK 约束只认英文）。
+- 扫查：全仓前端用户可见文案已扫——导航、九模块标题、空状态、指令状态文案（commandStatusText）原本已是中文；无类型筛选下拉控件（现 UI 无此控件，故只覆盖表单、列表、详情三处）；SettingsPage 集成列表的“类型：”显示的是集成种类标识（如 home_assistant/mqtt），不是设备类型，有意不动；DeviceDetailPage 的 action/params 是 API 字段名，按约定不动。
+- 部署与验证（见下“原生 iOS App 打包”一节的同一批部署）：Web 构建仍用 VITE_API_URL=/api（相对路径），已部署 bundle 不含 3.12.156.80 绝对地址；六个中文标签均在 bundle 内；API 新建 type=speaker 入库 device_type=speaker；未登录仍 401。
+
+## 原生 iOS App 打包（2026-11-20 23:45，Capacitor 套壳；用户自签）
+
+- 做法：apps/web 引入 Capacitor 8.6.2（@capacitor/core、@capacitor/ios 为 dependencies，@capacitor/cli 为 devDependency）；`npx cap init "Lila Home" uk.fafa888.lilahome --web-dir=dist`；`npx cap add ios`（ios/App 工程，bundle id uk.fafa888.lilahome）。capacitor.config.ts 只有 appId/appName/webDir=dist，无 server.url，走本地内嵌 Web 内容。
+- API 地址：package.json 加 build:web（VITE_API_URL=/api）与 build:native（VITE_API_URL=http://3.12.156.80/api）两个脚本；Dockerfile 与 compose 的 Web 构建仍走默认 `npm run build` + ARG VITE_API_URL=/api，Web 版行为未变。原生 bundle 已验证含 http://3.12.156.80/api 绝对地址，Web bundle 不含该绝对地址。
+- 明文 HTTP（临时措施）：ios/App/App/Info.plist 加 NSAppTransportSecurity → NSAllowsArbitraryLoads=true；等 lila.fafa888.uk 的 HTTPS 上线后去掉，改回只允许 HTTPS。
+- 版本：package.json version 0.0.0 → 0.1.0；ios 工程 MARKETING_VERSION 两处（Debug/Release）由 cap 默认的 1.0 改为 0.1.0；CURRENT_PROJECT_VERSION 仍为 1。未升 1.0.0。
+- 登录：不变，JWT 仍存 localStorage（WKWebView 可用）；后端未动。
+- .dockerignore（apps/web 新增）：node_modules、dist、ios 不进 Web 镜像构建上下文。
+- GitHub Actions：.github/workflows/build-ios.yml 已写在本地工作区（macos-15 runner：checkout → Node 24 → npm ci → native 模式构建 → npx cap sync ios → xcodebuild 无签名 archive（CODE_SIGNING_ALLOWED=NO）→ 打包 Payload 为 LilaHome-unsigned.ipa → upload-artifact 保留 30 天）。xcodebuild 用 `-target App` 而不用 `-scheme App`：生成工程里没有共享 scheme 文件（scheme 是 Xcode 首次打开时自动生成的，不进仓库），CI 上用 scheme 会报找不到。**未推 GitHub**：GitHub App 无 workflows 写权限，须由父代理走浏览器网页编辑器在 main 分支创建。本地校验：YAML 解析通过、actionlint 1.7.7 通过；本机无 macOS，xcodebuild 未实跑，待 workflow 落地后由 CI 实跑验证。
+- 部署：rsync（--exclude '.env'、node_modules、dist、hidden_files、.git、apps/web/ios/）到 /opt/lila-home；`docker compose --env-file .env up -d --build web` 只重建 web 容器（api/db/mqtt 未动）；4 容器 Up，api/db/mosquitto healthy。未动其他 10 个业务容器、未改 nginx/UFW/DNS、未重启服务器。
+- 验证（全部通过）：公网 GET / 200；/api/health 200（version 0.1.0，数据库 ok、MQTT ok、HA 未接入）；未登录 POST /api/v1/devices → 401；已部署 bundle（assets/index-jAtwwAQl.js，新哈希，确为新构建）含六个中文标签（热水器 9、路由器 5、音响 5 等），且不含 3.12.156.80/api 绝对地址；临时 JWT（现签 10 分钟，role=owner，未建测试用户）新建 type=speaker → 200 且 device_type=speaker，复查 200，随后删除 200，列表恢复 9 台（用户设备未动）。另：本次 `up -d --build web` 时 api 容器也被 compose 重建了一次（Up 5 秒后恢复 healthy，db 未重启，9 台设备与用户账号未动，属依赖链副作用，无数据影响）。
+- 待办：workflow 文件落地 main 后由 CI 实跑验证（xcodebuild 未在 macOS 上实跑）；Info.plist 的 NSAllowsArbitraryLoads 待 lila.fafa888.uk HTTPS 上线后去掉。
