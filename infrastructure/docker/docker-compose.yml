@@ -3,7 +3,9 @@
 # 启动：cd /opt/lila-home/infrastructure/docker && docker compose --env-file .env up -d --build
 # 注意：
 # - postgres 与 mosquitto 不发布任何端口，只在 compose 内部网络通信。
-# - api 与 web 只绑定 Tailscale IP 100.114.133.80，绝不绑 0.0.0.0（服务器 UFW 是关的）。
+# - api 只绑定 Tailscale IP 100.114.133.80（不公开；前端经 web 容器 /api/ 同源代理调它）。
+# - web 绑定 0.0.0.0:3001（2026-11-20 用户要求放公网；0.0.0.0 包含 Tailscale IP，
+#   Tailscale 直接访问仍可用）。服务器 UFW 是关的，公网访问目前无应用内登录。
 # - Mosquitto v0.1 允许匿名连接，但只限内部网络、不暴露端口；接入鉴权是后续阶段事项（见 STAGE1_LOG）。
 
 name: lilahome
@@ -80,12 +82,14 @@ services:
     build:
       context: ../../apps/web
       dockerfile: Dockerfile
+      args:
+        VITE_API_URL: /api
     image: lila-web:0.1.0
     container_name: lila-web-1
     restart: unless-stopped
     mem_limit: 128m
     ports:
-      - "100.114.133.80:3001:80"
+      - "0.0.0.0:3001:80"
     depends_on:
       api:
         condition: service_healthy

@@ -11,6 +11,10 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 COPY . .
+
+# 构建参数：VITE_API_URL（部署时注入；空则前端回退到同主机 :8001）。
+ARG VITE_API_URL
+ENV VITE_API_URL=$VITE_API_URL
 RUN npm run build
 
 # ---- 运行阶段 ----

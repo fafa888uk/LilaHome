@@ -79,6 +79,28 @@
 
 **本次改动文件：** apps/api 全模块（main.py/db.py/errors.py/auth.py/services/*/integrations/*/routers/*，Dockerfile 加 chmod）、apps/web 14 路由；VERSION 仍 "0.1.0"（API 子代理按最严格字面理解未动版本号；升 1.0.0 需单独确认）。
 
+## 公网直放（2026-11-20 23:05 开始，用户要求“直接放公网”，不再等 Tailscale）
+
+- 原因：用户手机打不开 http://100.114.133.80:3001（手机未进 tailnet，服务器上 peers 为 none）；解释后用户要求直接放公网。
+- 原计划（域名 + 证书）执行到一半后变更：Cloudflare 登录被机器人验证拦住，DNS 加不上，域名 + 证书路子先停，改走公网 IP。
+
+### 已做（域名路线，做到 DNS 等待为止）
+
+- 前端改成同源 /api 代理：apps/web/nginx.conf 加 `location /api/ { proxy_pass http://api:8000/; ... }`（尾部斜杠去前缀，带 Host/X-Real-IP/X-Forwarded-For/X-Forwarded-Proto 头），SPA fallback 不动；apps/web/Dockerfile 加 ARG/ENV VITE_API_URL；compose web 服务加 build.args VITE_API_URL=/api。
+- 部署验证通过（重建后）：4 容器 Up，api/db/mosquitto healthy；127.0.0.1:3001 与 100.114.133.80:3001 均为 200；`curl 127.0.0.1:3001/api/health` 返回 ok JSON（DB/MQTT ok、HA 未接入）；ss 显示 3001 只在 100.114.133.80 与 127.0.0.1 上，5432/1883 不在宿主机监听。
+- 宿主机 nginx 站点 /etc/nginx/sites-available/lila.fafa888.uk 已写（server_name lila.fafa888.uk，proxy_pass http://127.0.0.1:3001），已链接到 sites-enabled，nginx -t 通过并 reload，Host 头测试返回 200。
+- DNS 等待：服务器 getent 查 9 次（约 9 分钟）均未解析；Cloudflare DoH 两次返回 NXDOMAIN（Status 3），记录确实不在 zone 里。certbot 未跑（DNS 不通，硬跑必败）。已查：LE 生产账户（2026-11-09 建，acct 3976983382）`body: {}`，**无注册邮箱**；ai/dy 证书均有效（分别到 2027-02-12 / 2027-02-07），说明本站历来无邮箱注册。
+
+### 改走公网 IP（2026-11-20 23:13，计划变更）
+
+- compose web 端口改成单条 `"0.0.0.0:3001:80"`（0.0.0.0 包含 Tailscale IP，Tailscale 访问不断；原来两条并存会冲突，已去掉）。api 仍只绑 100.114.133.80:8001（不公开；前端经 web 容器 /api/ 同源代理调它）。5432/1883 仍不发布。
+- 重建验证：4 容器 Up，api/db/mosquitto healthy；**Tailscale http://100.114.133.80:3001/ 仍为 200**；ss 显示 0.0.0.0:3001 监听，8001 仍只在 100.114.133.80 上。
+- **阻塞（未解决）：公网 http://3.12.156.80:3001/ 不通。** 服务器本机 curl 返回 000，本机 VM（非 tailnet）curl 同样 000，而同一台服务器上 80/443/22 端口对公网 IP 均通（200/200/open）。容器在 0.0.0.0:3001 正常监听且 Tailscale IP 能访问，证明问题不在容器/应用，在 AWS 安全组入站规则未放行 3001。服务器与本机均无 AWS CLI，实例元数据（169.254.169.254）返回空、无 IAM 角色，本子代理无法自行开安全组端口。
+- 待父代理/用户处理：**在 AWS 控制台给实例 i-09a6adfe864e75794（us-east-2）的安全组放行入站 TCP 3001**，放行后 http://3.12.156.80:3001 即可用；放行后须再验一次本机与非 tailnet 的 curl。
+- 备选方案（未实施，等决定）：宿主机 nginx 80 端口已在安全组放行，裸 IP 目前只返回 nginx 默认欢迎页（root /var/www/html，无业务依赖），可把默认站点改成反代 127.0.0.1:3001，让 http://3.12.156.80/ 直接用，绕开安全组。但这会改生产默认站点行为，未经批准不动。
+- 安全提示：公网放行后，Lila Home 将以 HTTP（无登录、无 HTTPS）暴露在公网，任何人打开 http://3.12.156.80:3001 都能进；应用内登录尚未落地。用户已明确要求放公网并授权，但登录与 HTTPS 仍是待办。
+- lila.fafa888.uk 的 nginx 站点文件已留在服务器上（无 DNS，当前不起作用；DNS 加上后可直接用，不用重写）。
+
 ## 待办（Stage 1 剩余）
 
 1. Tailscale 登录完成 → 记录服务器 tailnet IP，验证 `tailscale status`。
@@ -86,3 +108,11 @@
 3. 家庭 LAN 侧 Home Assistant 主机确认（哪台机器跑 HA 尚未确定）→ 部署 HA → 接入 tailnet。
 4. 设备清点（H7/H8）：仍待用户提供五类设备的品牌+型号+联网方式，无法凭空编造。
 5. 断网演练与 VPS 故障演练（各记真实恢复时间）。
+
+## 公网直放（续）：走 80 端口已通（2026-11-20 23:16，父代理执行）
+
+- 原因：AWS 安全组未放行 3001（本机与非 tailnet curl 均为 000），而 80 端口已放行且只返回 nginx 默认欢迎页（无业务依赖）。Cloudflare 登录被 Turnstile 机器人验证拦住，lila.fafa888.uk 的 DNS 加不上，域名 + 证书路线暂停。
+- 做法：宿主机 nginx 默认站点（sites-enabled/default）改成反代 http://127.0.0.1:3001（原 try_files 欢迎页已替换；原文件备份在 /etc/nginx/sites-available/default.bak.lila）。nginx -t 通过并 reload。lila.fafa888.uk 的站点文件仍留在服务器上（无 DNS，暂不起作用）。
+- 验证（非 tailnet 的本机 VM 实测）：http://3.12.156.80/ 返回 200，标题 Lila Home；/api/health 返回 ok JSON（数据库 ok、MQTT ok、HA 未接入）；/api/api/v1/status 返回 200（注意：代理会去掉 /api 前缀，前端调的就是这条路径）。Tailscale http://100.114.133.80:3001/ 仍为 200；ai/dy 站点仍为 200，无回归。
+- 现状：公网地址 http://3.12.156.80/（HTTP，无登录、无 HTTPS）；3001 端口安全组仍未放行（未动 AWS）；lila.fafa888.uk DNS 待补（Cloudflare 登录问题解决后）。
+- 待办：给 Lila Home 加登录保护（公网已无登录开放）；补 lila.fafa888.uk DNS + HTTPS。
